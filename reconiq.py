@@ -70,7 +70,7 @@ def load_config():
         try:
             with open(CONFIG_PATH, 'r') as f:
                 stored = json.load(f)
-        except: pass
+        except json.JSONDecodeError: pass
     _env = {'openai': 'OPENAI_API_KEY', 'anthropic': 'ANTHROPIC_API_KEY', 'gemini': 'GOOGLE_API_KEY'}
     pref = stored.get('provider')
     if pref and os.environ.get(_env.get(pref, '')):
@@ -112,11 +112,11 @@ def scan_and_grab(ip, port):
                 printable = set(string.printable)
                 clean_raw = ''.join(filter(lambda x: x in printable, raw)).strip()
                 banner = clean_raw.split('\n')[0].strip() if clean_raw else "Active, no text banner."
-            except: banner = "Timeout/No banner."
+            except (socket.timeout, OSError): banner = "Active, no text banner."
             s.close()
             return port, banner
         s.close()
-    except: pass
+    except (socket.timeout, OSError): pass
     return None, None
 
 # --- PREMIUM MARKDOWN RENDERER ---
@@ -151,7 +151,7 @@ def get_cves_from_ai(scan_data, provider, api_key):
             payload = {"model": "claude-haiku-4-5-20251001", "max_tokens": 256, "messages": [{"role": "user", "content": prompt}]}
             resp = requests.post(url, headers=headers, json=payload, timeout=15)
             if resp.status_code == 200: raw_response = resp.json()['content'][0]['text']
-    except: pass
+    except (requests.RequestException, KeyError, ValueError): pass
     return list(set(re.findall(r"CVE-\d{4}-\d+", raw_response.upper())))
 
 def fetch_epss_data(cve_list):
@@ -164,7 +164,7 @@ def fetch_epss_data(cve_list):
                 if data:
                     epss_val = float(data[0].get('epss', 0)) * 100
                     epss_data[cve] = f"{epss_val:.2f}% probability of exploitation within 30 days"
-        except: pass
+        except (requests.RequestException, KeyError, ValueError): pass
     return epss_data
 
 def analyze_with_ai(target_ip, scan_data, epss_data, provider, api_key, brief):
@@ -195,7 +195,7 @@ def analyze_with_ai(target_ip, scan_data, epss_data, provider, api_key, brief):
             payload = {"model": "claude-sonnet-4-6", "max_tokens": 2048, "messages": [{"role": "user", "content": prompt}]}
             resp = requests.post(url, headers=headers, json=payload, timeout=20)
             if resp.status_code == 200: return resp.json()['content'][0]['text'].strip()
-    except Exception as e: return f"Error: {e}"
+    except (requests.RequestException, KeyError, ValueError) as e: return f"Error: {e}"
     return "Failed to parse AI response."
 
 # --- MAIN EXECUTOR ---
@@ -224,7 +224,7 @@ if __name__ == "__main__":
     target_ports = parse_ports(args.ports)
     try:
         targets = [str(ip) for ip in ipaddress.IPv4Network(args.target, strict=False).hosts()] if '/' in args.target else [args.target]
-    except:
+    except ValueError:
         print(f"  {I_ERROR} Invalid Target/Subnet"); sys.exit(1)
 
     if not args.quiet:
