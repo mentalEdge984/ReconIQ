@@ -1,0 +1,12 @@
+__pycache__/
+*.py[cod]
+*.so
+.venv/
+venv/
+.reconiq.json
+*.scan.txt
+report.txt
+scan.txt
+.vscode/
+.idea/
+.DS_Store
