@@ -100,10 +100,10 @@ def parse_ports(port_arg):
         return [int(port_arg)]
 
 # --- SCANNER ---
-def scan_and_grab(ip, port):
+def scan_and_grab(ip, port, timeout=1.5):
     try:
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        s.settimeout(1.5)
+        s.settimeout(timeout)
         if s.connect_ex((ip, port)) == 0:
             raw = ""
             try:
@@ -237,6 +237,7 @@ if __name__ == "__main__":
     parser.add_argument("-o", "--output", help="Save report to file")
     parser.add_argument("-q", "--quiet", action="store_true", help="Quiet mode")
     parser.add_argument("--brief", action="store_true", help="Exclude tutorials")
+    parser.add_argument("--timeout", type=float, default=1.5, metavar="SECS", help="Socket timeout per port (default: 1.5)")
     parser.add_argument("--version", action="version", version=f"ReconIQ {__version__}")
     args = parser.parse_args()
     
@@ -267,7 +268,7 @@ if __name__ == "__main__":
     if not args.quiet: start_spinner("Sweeping network signatures...")
     
     with concurrent.futures.ThreadPoolExecutor(max_workers=args.workers) as executor:
-        futures = {executor.submit(scan_and_grab, target_ip, p): (target_ip, p) for target_ip in targets for p in target_ports}
+        futures = {executor.submit(scan_and_grab, target_ip, p, args.timeout): (target_ip, p) for target_ip in targets for p in target_ports}
         for f in concurrent.futures.as_completed(futures):
             ip, port = futures[f]
             res_port, banner = f.result()
