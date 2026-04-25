@@ -65,12 +65,21 @@ def stop_spinner():
 
 # --- CONFIG & UTILS ---
 def load_config():
+    stored = {}
     if os.path.exists(CONFIG_PATH):
         try:
             with open(CONFIG_PATH, 'r') as f:
-                return json.load(f)
-        except: return {}
-    return {}
+                stored = json.load(f)
+        except: pass
+    _env = {'openai': 'OPENAI_API_KEY', 'anthropic': 'ANTHROPIC_API_KEY', 'gemini': 'GOOGLE_API_KEY'}
+    pref = stored.get('provider')
+    if pref and os.environ.get(_env.get(pref, '')):
+        return {'provider': pref, 'api_key': os.environ[_env[pref]]}
+    for prov, var in _env.items():
+        val = os.environ.get(var)
+        if val:
+            return {'provider': prov, 'api_key': val}
+    return stored
 
 def save_config(provider, api_key):
     with open(CONFIG_PATH, 'w') as f:
@@ -136,6 +145,12 @@ def get_cves_from_ai(scan_data, provider, api_key):
             payload = {"contents": [{"parts": [{"text": prompt}]}]}
             resp = requests.post(url, headers=headers, json=payload, timeout=15)
             if resp.status_code == 200: raw_response = resp.json()['candidates'][0]['content']['parts'][0]['text']
+        elif provider == "anthropic":
+            url = "https://api.anthropic.com/v1/messages"
+            headers = {"x-api-key": api_key, "anthropic-version": "2023-06-01", "Content-Type": "application/json"}
+            payload = {"model": "claude-haiku-4-5-20251001", "max_tokens": 256, "messages": [{"role": "user", "content": prompt}]}
+            resp = requests.post(url, headers=headers, json=payload, timeout=15)
+            if resp.status_code == 200: raw_response = resp.json()['content'][0]['text']
     except: pass
     return list(set(re.findall(r"CVE-\d{4}-\d+", raw_response.upper())))
 
@@ -174,6 +189,12 @@ def analyze_with_ai(target_ip, scan_data, epss_data, provider, api_key, brief):
             payload = {"contents": [{"parts": [{"text": prompt}]}]}
             resp = requests.post(url, headers=headers, json=payload, timeout=20)
             if resp.status_code == 200: return resp.json()['candidates'][0]['content']['parts'][0]['text'].strip()
+        elif provider == "anthropic":
+            url = "https://api.anthropic.com/v1/messages"
+            headers = {"x-api-key": api_key, "anthropic-version": "2023-06-01", "Content-Type": "application/json"}
+            payload = {"model": "claude-sonnet-4-6", "max_tokens": 2048, "messages": [{"role": "user", "content": prompt}]}
+            resp = requests.post(url, headers=headers, json=payload, timeout=20)
+            if resp.status_code == 200: return resp.json()['content'][0]['text'].strip()
     except Exception as e: return f"Error: {e}"
     return "Failed to parse AI response."
 
@@ -194,7 +215,8 @@ if __name__ == "__main__":
 
     if not api_key:
         print(f"\n  {I_WARN} {C_BOLD}RECONIQ SETUP{C_END}")
-        provider = 'gemini' if input(f"  {I_ARROW} Select Provider (1. Gemini, 2. OpenAI): ") == '1' else 'openai'
+        choice = input(f"  {I_ARROW} Select Provider (1. Gemini, 2. OpenAI, 3. Claude): ").strip()
+        provider = {'1': 'gemini', '2': 'openai', '3': 'anthropic'}.get(choice, 'gemini')
         api_key = input(f"  {I_ARROW} Enter {provider.upper()} API Key: ").strip()
         save_config(provider, api_key)
         print()
