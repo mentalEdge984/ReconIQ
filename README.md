@@ -37,7 +37,7 @@ sudo cp reconiq.py /usr/local/bin/reconiq
 ### Requirements
 - Python 3.7+
 - `requests` library
-- An API key from **OpenAI** OR **Google Gemini** (more providers coming in v2.5)
+- An API key from **OpenAI**, **Google Gemini**, or **Anthropic Claude**
 
 ---
 
@@ -78,6 +78,7 @@ reconiq -t 10.0.0.5 -q -o scan.txt
 | `-o, --output` | Save report to file | — |
 | `-q, --quiet` | Suppress UI output | — |
 | `--brief` | Skip detailed remediation tutorials | — |
+| `--timeout` | Socket timeout per port in seconds | `1.5` |
 | `--version` | Print version | — |
 
 ---
@@ -92,9 +93,9 @@ reconiq -t 10.0.0.5 -q -o scan.txt
 
 This tool is in active development. See [SECURITY.md](SECURITY.md) for the full audit. Quick summary of v2.4 limitations:
 
-- **API key storage:** Plaintext at `~/.reconiq.json` (chmod 600). Env-var support arrives in v2.5; OS keyring in v2.6.
-- **Banner grabbing:** Sends an HTTP HEAD probe to all open ports. May produce unusual banner text on non-HTTP services. Smart-protocol probing arrives in v2.5.
-- **Prompt injection consideration:** Service banners are passed to the AI as analysis input. Hostile banners cannot trigger actions but could shape report content. Hardening planned for v2.5.
+- **API key storage:** Plaintext at `~/.reconiq.json` (chmod 600). Set `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, or `GOOGLE_API_KEY` to bypass file storage entirely. OS keyring integration arrives in v2.6.
+- **Banner grabbing:** v2.5+ listens first; HTTP HEAD probe is only sent as a fallback for non-speaking services.
+- **Prompt injection:** Banner data is wrapped in `<<<SCAN_DATA_BEGIN>>>` / `<<<SCAN_DATA_END>>>` delimiters and the model is instructed to treat the block as data only.
 
 ---
 
@@ -112,7 +113,7 @@ Unauthorized scanning is illegal in most jurisdictions (Computer Fraud and Abuse
 
 ## Roadmap
 
-- **v2.5:** Anthropic Claude support, additional AI providers, environment-variable API key support, smart protocol-aware banner grabbing, narrowed exception handling
+- **v2.5 ✓:** Anthropic Claude support, additional AI providers, environment-variable API key support, smart protocol-aware banner grabbing, narrowed exception handling, `--timeout` flag, prompt-injection delimiter wrapping
 - **v2.6:** OS keyring integration, configurable scan timeouts, prompt-injection hardening
 - **v2.7:** SQLite scan history, diff mode, JSON output format
 - **v3.0:** FastAPI + WebSocket dashboard for real-time scan visualization

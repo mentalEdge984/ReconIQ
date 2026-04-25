@@ -20,7 +20,7 @@ import time
 import threading
 import itertools
 
-__version__ = "2.4.0"
+__version__ = "2.5.0"
 
 CONFIG_PATH = os.path.expanduser("~/.reconiq.json")
 
