@@ -377,6 +377,7 @@ if __name__ == "__main__":
         if args.output:
             try:
                 with open(args.output, 'w') as f: f.write(full_file_output)
+                os.chmod(args.output, stat.S_IRUSR | stat.S_IWUSR)
                 if not args.quiet: print(f"  {I_SUCCESS} Report saved to {C_BOLD}{args.output}{C_END}\n")
             except Exception as e: print(f"  {I_ERROR} Error saving to file: {e}\n")
     else:
