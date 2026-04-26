@@ -265,6 +265,8 @@ if __name__ == "__main__":
     parser.add_argument("--timeout", type=float, default=1.5, metavar="SECS", help="Socket timeout per port (default: 1.5)")
     parser.add_argument("--i-have-permission", action="store_true", dest="i_have_permission",
                         help="Skip authorization confirmation for scans covering more than 16 hosts")
+    parser.add_argument("--api-delay", type=float, default=0.5, metavar="SECS",
+                        help="Delay between AI calls for multi-host scans (default: 0.5)")
     parser.add_argument("--version", action="version", version=f"ReconIQ {__version__}")
     args = parser.parse_args()
     
@@ -342,7 +344,9 @@ if __name__ == "__main__":
 
     if all_results:
         full_file_output = ""
-        for ip, found_ports in all_results.items():
+        for i, (ip, found_ports) in enumerate(all_results.items()):
+            if i > 0 and args.api_delay > 0:
+                time.sleep(args.api_delay)
             if not args.quiet:
                 print(f"╭─ {C_BOLD}ANALYSIS: {ip}{C_END}")
                 start_spinner("AI extracting CVEs & pulling FIRST.org EPSS data...")
