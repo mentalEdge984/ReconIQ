@@ -48,15 +48,61 @@ I_WARN = f"{C_YELLOW}⚠{C_END}"
 I_ERROR = f"{C_RED}✖{C_END}"
 I_ARROW = f"{C_DIM}➜{C_END}"
 
+SCAN_MESSAGES = [
+    'Sweeping network signatures...',
+    'Probing the digital underbelly...',
+    'Knocking on every door, politely...',
+    'Mapping the attack surface...',
+    'Looking for unlocked windows...',
+]
+
+CVE_MESSAGES = [
+    'AI extracting CVEs & pulling FIRST.org EPSS data...',
+    'Convincing Gemini this is for educational purposes...',
+    'Cross-referencing the CVE matrix...',
+    'Bribing the EPSS API for a discount...',
+    'Asking the threat oracle politely...',
+    'Reading the FIRST.org tea leaves...',
+]
+
+SYNTHESIS_MESSAGES = [
+    'Synthesizing threat report...',
+    'Hacking the Gibson...',
+    'Establishing covert channel to threat intel...',
+    'Calculating risk in arbitrary units...',
+    'Channeling the spirit of Kevin Mitnick...',
+    'Decoding adversary chatter...',
+    'Compiling actionable intel...',
+    'Whispering sweet vulnerabilities to the model...',
+    'Doing the security math...',
+    'Spinning up the analyst brain...',
+    'Asking the AI nicely to hurry up...',
+    'Negotiating with the model for a faster reply...',
+]
+
 # --- SPINNER ANIMATION ---
 spinner_flag = False
-def spinner_task(text):
+def spinner_task(messages):
     spinner = itertools.cycle(['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'])
+    if isinstance(messages, str):
+        messages = [messages]
+    msg_cycle = itertools.cycle(messages)
+    current_msg = next(msg_cycle)
+    max_len = max(len(m) for m in messages)
+    ticks = 0
+    MSG_ROTATE_TICKS = 38  # ~3 s at 0.08 s/tick
     while spinner_flag:
-        sys.stdout.write(f"\r  {C_CYAN}{next(spinner)}{C_END} {C_DIM}{text}{C_END}")
+        sys.stdout.write(
+            f"\r  {C_CYAN}{next(spinner)}{C_END} {C_DIM}{current_msg}{C_END}"
+            + ' ' * (max_len - len(current_msg))
+        )
         sys.stdout.flush()
         time.sleep(0.08)
-    sys.stdout.write('\r' + ' ' * (len(text) + 5) + '\r')
+        ticks += 1
+        if ticks >= MSG_ROTATE_TICKS:
+            ticks = 0
+            current_msg = next(msg_cycle)
+    sys.stdout.write('\r' + ' ' * (max_len + 10) + '\r')
 
 def start_spinner(text):
     global spinner_flag
@@ -360,7 +406,7 @@ if __name__ == "__main__":
         print(f"╰─ {C_DIM}Provider  :{C_END} {provider.upper()}\n")
 
     all_results = {}
-    if not args.quiet: start_spinner("Sweeping network signatures...")
+    if not args.quiet: start_spinner(SCAN_MESSAGES)
     
     with concurrent.futures.ThreadPoolExecutor(max_workers=args.workers) as executor:
         futures = {executor.submit(scan_and_grab, target_ip, p, args.timeout): (target_ip, p) for target_ip in targets for p in target_ports}
@@ -386,14 +432,14 @@ if __name__ == "__main__":
                 time.sleep(args.api_delay)
             if not args.quiet:
                 print(f"╭─ {C_BOLD}ANALYSIS: {ip}{C_END}")
-                start_spinner("AI extracting CVEs & pulling FIRST.org EPSS data...")
+                start_spinner(CVE_MESSAGES)
             
             cve_list = get_cves_from_ai(found_ports, provider, api_key, timeout=max(15, args.ai_timeout / 4))
             epss_data = fetch_epss_data(cve_list)
             
             if not args.quiet:
                 stop_spinner()
-                start_spinner("Synthesizing threat report...")
+                start_spinner(SYNTHESIS_MESSAGES)
                 
             raw_report = analyze_with_ai(ip, found_ports, epss_data, provider, api_key, args.brief, timeout=args.ai_timeout)
             if not args.quiet: stop_spinner()
@@ -403,7 +449,7 @@ if __name__ == "__main__":
                     not args.brief):
                 if not args.quiet:
                     print(f"  {I_WARN} Full synthesis timed out — retrying in brief mode...")
-                    start_spinner("Synthesizing threat report...")
+                    start_spinner(SYNTHESIS_MESSAGES)
                 raw_report = analyze_with_ai(ip, found_ports, epss_data, provider, api_key, True, timeout=args.ai_timeout)
                 if not args.quiet: stop_spinner()
 
