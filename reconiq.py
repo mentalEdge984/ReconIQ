@@ -263,6 +263,8 @@ if __name__ == "__main__":
     parser.add_argument("-q", "--quiet", action="store_true", help="Quiet mode")
     parser.add_argument("--brief", action="store_true", help="Exclude tutorials")
     parser.add_argument("--timeout", type=float, default=1.5, metavar="SECS", help="Socket timeout per port (default: 1.5)")
+    parser.add_argument("--i-have-permission", action="store_true", dest="i_have_permission",
+                        help="Skip authorization confirmation for scans covering more than 16 hosts")
     parser.add_argument("--version", action="version", version=f"ReconIQ {__version__}")
     args = parser.parse_args()
     
@@ -299,6 +301,18 @@ if __name__ == "__main__":
         targets = [str(ip) for ip in ipaddress.IPv4Network(args.target, strict=False).hosts()] if '/' in args.target else [args.target]
     except ValueError:
         print(f"  {I_ERROR} Invalid Target/Subnet"); sys.exit(1)
+
+    if '/' in args.target and len(targets) > 16 and not args.i_have_permission:
+        if args.quiet:
+            print(f"  {I_ERROR} Scans covering {len(targets)} hosts require --i-have-permission. Aborted.")
+            sys.exit(1)
+        print(f"\n  {I_WARN} {C_BOLD}AUTHORIZATION CHECK{C_END}")
+        print(f"  {I_ARROW} Target expands to {C_BOLD}{len(targets)} hosts{C_END}.")
+        print(f"  {I_ARROW} Only scan systems you own or have {C_BOLD}explicit written permission{C_END} to test.")
+        _auth = input(f"  {I_ARROW} Confirm authorization [y/N]: ").strip().lower()
+        if _auth != 'y':
+            print(f"  {I_ERROR} Aborted."); sys.exit(0)
+        print()
 
     if not args.quiet:
         print(f"\n╭─ {C_BOLD}RECONIQ // AUDIT INITIATED{C_END}")
