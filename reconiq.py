@@ -20,6 +20,14 @@ import time
 import threading
 import itertools
 
+try:
+    import keyring as _keyring
+    _KEYRING_AVAILABLE = True
+except ImportError:
+    _KEYRING_AVAILABLE = False
+
+_KEYRING_SERVICE = "reconiq"
+
 __version__ = "2.5.0"
 
 CONFIG_PATH = os.path.expanduser("~/.reconiq.json")
@@ -72,6 +80,7 @@ def load_config():
                 stored = json.load(f)
         except json.JSONDecodeError: pass
     _env = {'openai': 'OPENAI_API_KEY', 'anthropic': 'ANTHROPIC_API_KEY', 'gemini': 'GOOGLE_API_KEY'}
+    # 1. Environment variables
     pref = stored.get('provider')
     if pref and os.environ.get(_env.get(pref, '')):
         return {'provider': pref, 'api_key': os.environ[_env[pref]]}
@@ -79,9 +88,25 @@ def load_config():
         val = os.environ.get(var)
         if val:
             return {'provider': prov, 'api_key': val}
+    # 2. OS keyring
+    if _KEYRING_AVAILABLE:
+        try:
+            kr_provider = _keyring.get_password(_KEYRING_SERVICE, "provider")
+            if kr_provider:
+                kr_key = _keyring.get_password(_KEYRING_SERVICE, kr_provider)
+                if kr_key:
+                    return {'provider': kr_provider, 'api_key': kr_key}
+        except Exception: pass
+    # 3. Legacy JSON file
     return stored
 
 def save_config(provider, api_key):
+    if _KEYRING_AVAILABLE:
+        try:
+            _keyring.set_password(_KEYRING_SERVICE, "provider", provider)
+            _keyring.set_password(_KEYRING_SERVICE, provider, api_key)
+            return
+        except Exception: pass
     with open(CONFIG_PATH, 'w') as f:
         json.dump({'provider': provider, 'api_key': api_key}, f)
     os.chmod(CONFIG_PATH, stat.S_IRUSR | stat.S_IWUSR)
@@ -251,6 +276,23 @@ if __name__ == "__main__":
         api_key = input(f"  {I_ARROW} Enter {provider.upper()} API Key: ").strip()
         save_config(provider, api_key)
         print()
+
+    if _KEYRING_AVAILABLE and os.path.exists(CONFIG_PATH) and not args.quiet:
+        try:
+            with open(CONFIG_PATH) as _f:
+                _legacy = json.load(_f)
+            if _legacy.get('api_key'):
+                print(f"\n  {I_WARN} {C_BOLD}LEGACY CONFIG DETECTED{C_END}")
+                print(f"  {I_ARROW} {C_DIM}~/.reconiq.json{C_END} stores your API key in plaintext.")
+                _ans = input(f"  {I_ARROW} Migrate to OS keyring and delete the file? [y/N]: ").strip().lower()
+                if _ans == 'y':
+                    _keyring.set_password(_KEYRING_SERVICE, "provider", _legacy['provider'])
+                    _keyring.set_password(_KEYRING_SERVICE, _legacy['provider'], _legacy['api_key'])
+                    os.remove(CONFIG_PATH)
+                    provider = _legacy['provider']
+                    api_key = _legacy['api_key']
+                    print(f"  {I_SUCCESS} Migrated to OS keyring. {C_DIM}~/.reconiq.json{C_END} deleted.\n")
+        except Exception: pass
 
     target_ports = parse_ports(args.ports)
     try:
