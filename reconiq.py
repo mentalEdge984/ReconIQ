@@ -398,6 +398,15 @@ if __name__ == "__main__":
             raw_report = analyze_with_ai(ip, found_ports, epss_data, provider, api_key, args.brief, timeout=args.ai_timeout)
             if not args.quiet: stop_spinner()
 
+            if (raw_report.startswith("Error:") and
+                    ('timeout' in raw_report.lower() or 'timed out' in raw_report.lower()) and
+                    not args.brief):
+                if not args.quiet:
+                    print(f"  {I_WARN} Full synthesis timed out — retrying in brief mode...")
+                    start_spinner("Synthesizing threat report...")
+                raw_report = analyze_with_ai(ip, found_ports, epss_data, provider, api_key, True, timeout=args.ai_timeout)
+                if not args.quiet: stop_spinner()
+
             colored_report = render_markdown_to_terminal(raw_report)
             if not args.quiet:
                 print(colored_report)
