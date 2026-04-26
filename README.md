@@ -37,6 +37,7 @@ sudo cp reconiq.py /usr/local/bin/reconiq
 ### Requirements
 - Python 3.7+
 - `requests` library
+- `keyring` library (for OS keyring storage; falls back to `~/.reconiq.json` if unavailable)
 - An API key from **OpenAI**, **Google Gemini**, or **Anthropic Claude**
 
 ---
@@ -79,6 +80,8 @@ reconiq -t 10.0.0.5 -q -o scan.txt
 | `-q, --quiet` | Suppress UI output | — |
 | `--brief` | Skip detailed remediation tutorials | — |
 | `--timeout` | Socket timeout per port in seconds | `1.5` |
+| `--i-have-permission` | Skip authorization prompt for scans > 16 hosts | — |
+| `--api-delay` | Seconds between AI calls on multi-host scans | `0.5` |
 | `--version` | Print version | — |
 
 ---
@@ -118,9 +121,9 @@ TLS certificate verification uses the system CA bundle by default. To trust a cu
 
 ## Security Notes
 
-This tool is in active development. See [SECURITY.md](SECURITY.md) for the full audit. Quick summary of v2.4 limitations:
+See [SECURITY.md](SECURITY.md) for the full audit. Current notes:
 
-- **API key storage:** Plaintext at `~/.reconiq.json` (chmod 600). Set `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, or `GOOGLE_API_KEY` to bypass file storage entirely. OS keyring integration arrives in v2.6.
+- **API key storage:** Saved to OS keyring (Keychain / Secret Service / Credential Manager) via the `keyring` library. Falls back to `~/.reconiq.json` (chmod 600) if no keyring backend is available. Set `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, or `GOOGLE_API_KEY` to bypass both.
 - **Banner grabbing:** v2.5+ listens first; HTTP HEAD probe is only sent as a fallback for non-speaking services.
 - **Prompt injection:** Banner data is wrapped in `<<<SCAN_DATA_BEGIN>>>` / `<<<SCAN_DATA_END>>>` delimiters and the model is instructed to treat the block as data only.
 
@@ -141,7 +144,7 @@ Unauthorized scanning is illegal in most jurisdictions (Computer Fraud and Abuse
 ## Roadmap
 
 - **v2.5 ✓:** Anthropic Claude support, additional AI providers, environment-variable API key support, smart protocol-aware banner grabbing, narrowed exception handling, `--timeout` flag, prompt-injection delimiter wrapping
-- **v2.6:** OS keyring integration, configurable scan timeouts, prompt-injection hardening
+- **v2.6 ✓:** OS keyring integration, authorization confirmation prompt, report chmod 600, AI call rate limiting (`--api-delay`), proxy/TLS documentation
 - **v2.7:** SQLite scan history, diff mode, JSON output format
 - **v3.0:** FastAPI + WebSocket dashboard for real-time scan visualization
 - **v4.0+:** Possible Go/Rust rewrite for performance

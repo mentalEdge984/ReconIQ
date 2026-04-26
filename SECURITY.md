@@ -5,7 +5,7 @@ This document tracks known security and code-quality issues identified at v2.4. 
 ## High Severity
 
 ### H-1 — API key plaintext storage
-**Status:** Partially fixed in v2.5 (env-var support); full fix in v2.6 (OS keyring)
+**Status:** Fixed in v2.6 (OS keyring via `keyring` library; env-var support added in v2.5)
 **Location:** `save_config()` writes `~/.reconiq.json` with raw key in JSON
 **Impact:** Anyone with read access to the user's home directory could read stored API keys. The file is `chmod 600`, limiting damage to the user themselves and root, but this is below industry standard for credential storage.
 **v2.5 fix:** Read from environment variables (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GOOGLE_API_KEY`) before falling back to the config file.
@@ -32,7 +32,7 @@ This document tracks known security and code-quality issues identified at v2.4. 
 **v2.5 fix:** Wrap untrusted banner data in clear delimiters and instruct the model that the contents are data, not instructions.
 
 ### M-3 — No proxy / TLS configurability
-**Status:** Will document in v2.5, configurable in v2.6
+**Status:** Documented in v2.6
 **Note:** `requests` already honors `HTTP_PROXY` / `HTTPS_PROXY` environment variables, but this is undocumented.
 
 ### M-4 — Hardcoded 1.5s socket timeout
@@ -43,13 +43,13 @@ This document tracks known security and code-quality issues identified at v2.4. 
 ## Low Severity
 
 ### L-1 — No rate limiting on AI/EPSS calls
-Subnet sweeps can burn through API quota quickly. Add token bucket in v2.7.
+**Status:** Fixed in v2.6 (`--api-delay` flag, default 0.5 s between hosts)
 
 ### L-2 — No authorization confirmation prompt
-Other tools in this author's portfolio (DBF3000) prompt for authorization confirmation; ReconIQ should match. v2.5 will add a `--i-have-permission` flag for any scan against more than a /28.
+**Status:** Fixed in v2.6 (`--i-have-permission` flag; interactive confirmation for scans > 16 hosts)
 
 ### L-3 — Output report files written without permission restrictions
-v2.5 will `chmod 600` saved reports.
+**Status:** Fixed in v2.6 (reports written with `chmod 600`)
 
 ## Informational
 
@@ -59,4 +59,4 @@ v2.5 will `chmod 600` saved reports.
 
 ---
 
-**Last reviewed:** v2.5.0
+**Last reviewed:** v2.6.0
