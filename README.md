@@ -82,6 +82,7 @@ reconiq -t 10.0.0.5 -q -o scan.txt
 | `--timeout` | Socket timeout per port in seconds | `1.5` |
 | `--i-have-permission` | Skip authorization prompt for scans > 16 hosts | — |
 | `--api-delay` | Seconds between AI calls on multi-host scans | `0.5` |
+| `--ai-timeout` | AI provider response timeout in seconds | `60.0` |
 | `--version` | Print version | — |
 
 ---
