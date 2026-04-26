@@ -407,18 +407,37 @@ if __name__ == "__main__":
                 raw_report = analyze_with_ai(ip, found_ports, epss_data, provider, api_key, True, timeout=args.ai_timeout)
                 if not args.quiet: stop_spinner()
 
-            colored_report = render_markdown_to_terminal(raw_report)
+            synthesis_failed = _is_ai_error(raw_report)
+
             if not args.quiet:
-                print(colored_report)
+                if synthesis_failed:
+                    print(f"  {I_WARN} Full report unavailable — showing extracted threat intel only.")
+                    print(f"\n  {C_CYAN}│{C_END} {C_BOLD}Active Services{C_END}")
+                    for p, b in found_ports.items():
+                        print(f"    {C_DIM}•{C_END} {C_BOLD}Port {p}{C_END}  {C_DIM}{b}{C_END}")
+                    if cve_list:
+                        print(f"\n  {C_CYAN}│{C_END} {C_BOLD}Extracted CVEs{C_END}")
+                        for cve in cve_list:
+                            epss_str = epss_data.get(cve, "No EPSS data")
+                            print(f"    {C_DIM}•{C_END} {C_BOLD}{cve}{C_END}  {C_DIM}{epss_str}{C_END}")
+                else:
+                    print(render_markdown_to_terminal(raw_report))
                 if cve_list:
                     print(f"\n  {C_CYAN}│{C_END} {C_BOLD}EPSS Deep Dive Links{C_END}")
                     for cve in cve_list:
                         print(f"    {C_DIM}•{C_END} {C_BOLD}{cve}{C_END} : {C_BLUE}https://epsslookuptool.com/?cve={cve}{C_END}")
                 print(f"╰{'─'*50}\n")
-            
+
             host_output = f"=== RECONIQ REPORT: {ip} ===\n\n[SERVICES]\n"
             for p, b in found_ports.items(): host_output += f"Port {p}: {b}\n"
-            host_output += "\n" + raw_report + "\n"
+            if synthesis_failed:
+                host_output += "\n[SYNTHESIS FAILED — PARTIAL RESULTS]\n"
+                if cve_list:
+                    host_output += "\n[EXTRACTED CVEs]\n"
+                    for cve in cve_list:
+                        host_output += f"- {cve}: {epss_data.get(cve, 'No EPSS data')}\n"
+            else:
+                host_output += "\n" + raw_report + "\n"
             if cve_list:
                 host_output += "\n[EPSS LINKS]\n"
                 for cve in cve_list: host_output += f"- {cve}: https://epsslookuptool.com/?cve={cve}\n"
