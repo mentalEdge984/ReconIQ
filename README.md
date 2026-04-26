@@ -89,6 +89,33 @@ reconiq -t 10.0.0.5 -q -o scan.txt
 
 ---
 
+## Network Configuration
+
+ReconIQ uses the [`requests`](https://requests.readthedocs.io) library for all outbound HTTP calls (AI providers, EPSS API). `requests` automatically honors the standard proxy environment variables — no extra flags needed:
+
+| Variable | Purpose |
+|----------|---------|
+| `HTTP_PROXY` | Proxy for plain HTTP requests |
+| `HTTPS_PROXY` | Proxy for HTTPS requests (AI API calls go here) |
+| `NO_PROXY` | Comma-separated list of hostnames to bypass |
+
+**Example — route all AI/EPSS calls through Burp Suite:**
+```bash
+export HTTPS_PROXY=http://127.0.0.1:8080
+reconiq -t 192.168.1.1
+```
+
+**Example — corporate proxy with no-proxy exclusions:**
+```bash
+export HTTPS_PROXY=http://proxy.corp.local:3128
+export NO_PROXY=localhost,127.0.0.1,10.0.0.0/8
+reconiq -t 10.10.5.20
+```
+
+TLS certificate verification uses the system CA bundle by default. To trust a custom CA (e.g., Burp's certificate), set `REQUESTS_CA_BUNDLE=/path/to/ca.pem`.
+
+---
+
 ## Security Notes
 
 This tool is in active development. See [SECURITY.md](SECURITY.md) for the full audit. Quick summary of v2.4 limitations:
