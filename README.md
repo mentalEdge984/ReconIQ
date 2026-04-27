@@ -146,6 +146,9 @@ Unauthorized scanning is illegal in most jurisdictions (Computer Fraud and Abuse
 
 - **v2.5 ✓:** Anthropic Claude support, additional AI providers, environment-variable API key support, smart protocol-aware banner grabbing, narrowed exception handling, `--timeout` flag, prompt-injection delimiter wrapping
 - **v2.6 ✓:** OS keyring integration, authorization confirmation prompt, report chmod 600, AI call rate limiting (`--api-delay`), proxy/TLS documentation
+- **v2.6.1 ✓:** `--ai-timeout` flag, HTTP error surfacing, timeout auto-retry in brief mode, partial results on synthesis failure, rotating spinner messages
+- **v2.6.2 ✓:** Banner truncation fix — increased recv buffer, capture first 6 header lines (H-3)
+- **v2.6.3 ✓:** Binary protocol detection — `_is_binary()` helper prevents false-positive CVEs on TLS/RDP/proprietary services (H-4)
 - **v2.7:** SQLite scan history, diff mode, JSON output format
 - **v3.0:** FastAPI + WebSocket dashboard for real-time scan visualization
 - **v4.0+:** Possible Go/Rust rewrite for performance

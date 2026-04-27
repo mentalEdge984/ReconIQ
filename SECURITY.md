@@ -4,6 +4,12 @@ This document tracks known security and code-quality issues identified at v2.4. 
 
 ## High Severity
 
+### H-4 — Binary protocol data stripped, service misidentified as "no banner"
+**Status:** Fixed in v2.6.3
+**Location:** `scan_and_grab()` printable-character filter stripped all binary data
+**Impact:** Ports running TLS, RDP, or binary protocols returned "Active, no text banner." — identical to a genuinely quiet port. AI received no version information and identified CVEs by port number alone, producing false positives.
+**v2.6.3 fix:** Added `_is_binary()` helper that detects when >30% of response bytes are non-printable. Binary responses now return a descriptive banner string indicating the protocol type, giving the AI meaningful context instead of silence.
+
 ### H-3 — Banner truncation caused AI false-positive CVE matching
 **Status:** Fixed in v2.6.2
 **Location:** `scan_and_grab()` was truncating banners to first line only, losing HTTP Server/version headers needed for software identification.
@@ -65,4 +71,4 @@ This document tracks known security and code-quality issues identified at v2.4. 
 
 ---
 
-**Last reviewed:** v2.6.2
+**Last reviewed:** v2.6.3
