@@ -195,9 +195,13 @@ def scan_and_grab(ip, port, timeout=1.5):
             if not raw:
                 try:
                     s.sendall(b"HEAD / HTTP/1.0\r\n\r\n")
-                    raw = s.recv(4096).decode('utf-8', errors='ignore').strip()
-                except (socket.timeout, OSError):
-                    pass
+                    try:
+                        raw = s.recv(4096).decode('utf-8', errors='ignore').strip()
+                    except (socket.timeout, OSError):
+                        raw = ""
+                except OSError:
+                    s.close()
+                    return port, "Active — probe failed (connection dropped during HTTP HEAD)"
             printable = set(string.printable)
             clean = ''.join(c for c in raw if c in printable).strip()
             lines = [l.strip() for l in clean.split('\n') if l.strip()]
