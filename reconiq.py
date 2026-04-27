@@ -178,18 +178,19 @@ def scan_and_grab(ip, port, timeout=1.5):
         if s.connect_ex((ip, port)) == 0:
             raw = ""
             try:
-                raw = s.recv(1024).decode('utf-8', errors='ignore').strip()
+                raw = s.recv(4096).decode('utf-8', errors='ignore').strip()
             except socket.timeout:
                 pass
             if not raw:
                 try:
                     s.sendall(b"HEAD / HTTP/1.0\r\n\r\n")
-                    raw = s.recv(1024).decode('utf-8', errors='ignore').strip()
+                    raw = s.recv(4096).decode('utf-8', errors='ignore').strip()
                 except (socket.timeout, OSError):
                     pass
             printable = set(string.printable)
             clean = ''.join(c for c in raw if c in printable).strip()
-            banner = clean.split('\n')[0].strip() if clean else "Active, no text banner."
+            lines = [l.strip() for l in clean.split('\n') if l.strip()]
+            banner = ' | '.join(lines[:6]) if lines else "Active, no text banner."
             s.close()
             return port, banner
         s.close()
