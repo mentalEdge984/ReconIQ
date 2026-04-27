@@ -4,6 +4,12 @@ This document tracks known security and code-quality issues identified at v2.4. 
 
 ## High Severity
 
+### H-3 — Banner truncation caused AI false-positive CVE matching
+**Status:** Fixed in v2.6.2
+**Location:** `scan_and_grab()` was truncating banners to first line only, losing HTTP Server/version headers needed for software identification.
+**Impact:** AI received only `HTTP/1.1 200 OK` for HTTP services and would identify CVEs based on port numbers alone, producing hallucinated CVE matches and inflated risk scores. Reported by community review.
+**v2.6.2 fix:** Increased recv buffer to 4096 bytes; capture first 6 non-empty header lines instead of first line only.
+
 ### H-1 — API key plaintext storage
 **Status:** Fixed in v2.6 (OS keyring via `keyring` library; env-var support added in v2.5)
 **Location:** `save_config()` writes `~/.reconiq.json` with raw key in JSON
@@ -59,4 +65,4 @@ This document tracks known security and code-quality issues identified at v2.4. 
 
 ---
 
-**Last reviewed:** v2.6.0
+**Last reviewed:** v2.6.2
