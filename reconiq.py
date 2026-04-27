@@ -175,7 +175,7 @@ def _is_binary(data: bytes) -> bool:
     """Return True if more than 30% of bytes are non-printable non-whitespace."""
     if not data:
         return False
-    non_text = sum(1 for b in data if b < 0x20 and b not in (0x09, 0x0a, 0x0d))
+    non_text = sum(1 for b in data if (b < 0x20 and b not in (0x09, 0x0a, 0x0d)) or b > 0x7e)
     return (non_text / len(data)) > 0.30
 
 def scan_and_grab(ip, port, timeout=1.5):
