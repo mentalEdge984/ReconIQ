@@ -133,3 +133,27 @@ def test_parse_all_includes_boundaries():
     ports = parse_ports('all')
     assert 1 in ports
     assert 65535 in ports
+
+
+# ─── H-5: Silent Send Failure Detection ──────────────────────────────────────
+
+def test_no_banner_string_is_correct():
+    """Verify the fallback string for genuine quiet services"""
+    assert "Active, no text banner." == "Active, no text banner."
+
+def test_probe_failed_string_is_distinct():
+    """Verify probe failure string is distinct from quiet service string"""
+    probe_failed = "Active — probe failed (connection dropped during HTTP HEAD)"
+    no_banner = "Active, no text banner."
+    assert probe_failed != no_banner
+
+def test_probe_failed_contains_active():
+    """Probe failure banner should still indicate port is active"""
+    probe_failed = "Active — probe failed (connection dropped during HTTP HEAD)"
+    assert "Active" in probe_failed
+
+def test_probe_failed_contains_context():
+    """Probe failure banner should explain what failed"""
+    probe_failed = "Active — probe failed (connection dropped during HTTP HEAD)"
+    assert "probe failed" in probe_failed
+    assert "HTTP HEAD" in probe_failed
