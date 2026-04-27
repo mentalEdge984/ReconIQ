@@ -171,6 +171,13 @@ def parse_ports(port_arg):
         return [int(port_arg)]
 
 # --- SCANNER ---
+def _is_binary(data: bytes) -> bool:
+    """Return True if more than 30% of bytes are non-printable non-whitespace."""
+    if not data:
+        return False
+    non_text = sum(1 for b in data if b < 0x20 and b not in (0x09, 0x0a, 0x0d))
+    return (non_text / len(data)) > 0.30
+
 def scan_and_grab(ip, port, timeout=1.5):
     try:
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -178,7 +185,11 @@ def scan_and_grab(ip, port, timeout=1.5):
         if s.connect_ex((ip, port)) == 0:
             raw = ""
             try:
-                raw = s.recv(4096).decode('utf-8', errors='ignore').strip()
+                raw_bytes = s.recv(4096)
+                if _is_binary(raw_bytes):
+                    s.close()
+                    return port, f"Binary/encrypted protocol (port {port} — possible TLS, RDP, or proprietary service)"
+                raw = raw_bytes.decode('utf-8', errors='ignore').strip()
             except socket.timeout:
                 pass
             if not raw:
