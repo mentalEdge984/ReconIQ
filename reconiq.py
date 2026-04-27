@@ -28,7 +28,7 @@ except ImportError:
 
 _KEYRING_SERVICE = "reconiq"
 
-__version__ = "2.6.3"
+__version__ = "2.6.4"
 
 CONFIG_PATH = os.path.expanduser("~/.reconiq.json")
 

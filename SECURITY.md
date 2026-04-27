@@ -4,6 +4,12 @@ This document tracks known security and code-quality issues identified at v2.4. 
 
 ## High Severity
 
+### H-5 — Silent sendall() failure indistinguishable from genuine quiet service
+**Status:** Fixed in v2.6.4
+**Location:** `scan_and_grab()` HTTP HEAD fallback exception handler
+**Impact:** When sendall() raised OSError (connection dropped between connect and probe), the exception was caught silently and the banner became "Active, no text banner." — identical to a port that is legitimately open but not chatty. The AI and the user had no way to distinguish a failed probe from a genuine result.
+**v2.6.4 fix:** Split the send and receive exception handlers. sendall() OSError now returns an explicit "Active — probe failed" banner string, distinguishing it from a quiet service in both terminal output and AI input.
+
 ### H-4 — Binary protocol data stripped, service misidentified as "no banner"
 **Status:** Fixed in v2.6.3
 **Location:** `scan_and_grab()` printable-character filter stripped all binary data
@@ -71,4 +77,4 @@ This document tracks known security and code-quality issues identified at v2.4. 
 
 ---
 
-**Last reviewed:** v2.6.3
+**Last reviewed:** v2.6.4
