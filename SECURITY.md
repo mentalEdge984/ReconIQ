@@ -4,6 +4,12 @@ This document tracks known security and code-quality issues identified at v2.4. 
 
 ## High Severity
 
+### H-6 — Single recv(4096) call could return truncated headers on slow or fragmented responses
+**Status:** Fixed in v2.7.0
+**Location:** `scan_and_grab()` both banner-grab paths (initial listen and HTTP HEAD fallback)
+**Impact:** A single `recv(4096)` call is not guaranteed to return a complete HTTP response when headers arrive in multiple TCP segments. Slow services or responses with large headers would be silently truncated, causing the AI to receive incomplete version strings and produce false-positive or missed CVE matches.
+**v2.7.0 fix:** Added `_recv_until()` helper that loops recv() until the HTTP header terminator (`\r\n\r\n` or `\n\n`) is seen, the socket times out, or `max_bytes` (16 384) is reached. Never raises — caller receives whatever arrived. Both recv paths in `scan_and_grab()` now use this helper.
+
 ### H-5 — Silent sendall() failure indistinguishable from genuine quiet service
 **Status:** Fixed in v2.6.4
 **Location:** `scan_and_grab()` HTTP HEAD fallback exception handler

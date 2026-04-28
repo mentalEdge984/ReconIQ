@@ -171,6 +171,25 @@ def parse_ports(port_arg):
         return [int(port_arg)]
 
 # --- SCANNER ---
+def _recv_until(sock, timeout, max_bytes=16384):
+    """Read from sock until HTTP headers end, timeout, or max_bytes reached.
+    Returns raw bytes. Never raises — caller gets whatever arrived."""
+    buf = b""
+    sock.settimeout(timeout)
+    try:
+        while len(buf) < max_bytes:
+            chunk = sock.recv(4096)
+            if not chunk:
+                break
+            buf += chunk
+            if b"\r\n\r\n" in buf or b"\n\n" in buf:
+                break
+    except socket.timeout:
+        pass
+    except OSError:
+        pass
+    return buf
+
 def _is_binary(data: bytes) -> bool:
     """Return True if more than 30% of bytes are non-printable non-whitespace."""
     if not data:
@@ -185,7 +204,7 @@ def scan_and_grab(ip, port, timeout=1.5):
         if s.connect_ex((ip, port)) == 0:
             raw = ""
             try:
-                raw_bytes = s.recv(4096)
+                raw_bytes = _recv_until(s, timeout)
                 if _is_binary(raw_bytes):
                     s.close()
                     return port, f"Binary/encrypted protocol (port {port} — possible TLS, RDP, or proprietary service)"
@@ -196,7 +215,7 @@ def scan_and_grab(ip, port, timeout=1.5):
                 try:
                     s.sendall(b"HEAD / HTTP/1.0\r\n\r\n")
                     try:
-                        raw = s.recv(4096).decode('utf-8', errors='ignore').strip()
+                        raw = _recv_until(s, timeout).decode('utf-8', errors='ignore').strip()
                     except (socket.timeout, OSError):
                         raw = ""
                 except OSError:
