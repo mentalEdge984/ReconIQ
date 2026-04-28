@@ -264,7 +264,18 @@ def scan_and_grab(ip, port, timeout=1.5):
 
 # --- PREMIUM MARKDOWN RENDERER ---
 def render_markdown_to_terminal(text):
-    text = re.sub(r'^(#{1,3})\s+(.*)', f'\n  {C_CYAN}│{C_END} {C_BOLD}\\2{C_END}', text, flags=re.MULTILINE)
+    def _header(m):
+        level, title = len(m.group(1)), m.group(2).strip()
+        if level == 1:
+            t = title.upper()
+            fill = max(2, 62 - len(t))
+            return f"\n╔══ {C_BOLD}{C_CYAN}{t}{C_END} {'═' * fill}╗"
+        elif level == 2:
+            return f"\n  {C_BLUE}│{C_END} {C_BOLD}{title}{C_END}"
+        else:
+            return f"\n    {C_DIM}▸{C_END} {title}"
+
+    text = re.sub(r'^(#{1,3})\s+(.*)', _header, text, flags=re.MULTILINE)
     text = re.sub(r'\*\*(.*?)\*\*', f'{C_BOLD}\\1{C_END}', text)
     text = re.sub(r'^(\s*)\*\s', f'\\1  {C_DIM}•{C_END} ', text, flags=re.MULTILINE)
 
@@ -279,8 +290,14 @@ def render_markdown_to_terminal(text):
     text = re.sub(r'CVSS[^:]*(?:Base\s+)?Score:\s*(\d+\.?\d*)', _cvss_badge, text)
     text = re.sub(r'EPSS[^\d]*(\d+\.?\d*)%', _epss_badge, text)
 
+    def _should_indent(line):
+        plain = re.sub(r'\033\[[0-9;]*m', '', line)
+        return not (plain.startswith('╔') or plain.startswith('╠') or
+                    plain.startswith('╚') or plain.startswith('║') or
+                    plain.startswith('  │') or plain.startswith('    ▸'))
+
     lines = text.split('\n')
-    indented = "\n".join([f"    {line}" if not line.startswith("  │") else line for line in lines])
+    indented = "\n".join([f"    {line}" if _should_indent(line) else line for line in lines])
     return indented
 
 # --- REPORT RENDERING UTILITIES ---
@@ -475,6 +492,11 @@ def analyze_with_ai(target_ip, scan_data, epss_data, provider, api_key, brief, t
         prompt += "3. REMEDIATION: Provide step-by-step, click-by-click instructions on securing these ports. "
     else:
         prompt += "3. REMEDIATION: Provide a 1-2 sentence mitigation summary."
+    prompt += (
+        "\n4. HEADINGS: Use # (single hash) for top-level sections such as Services, Risk Assessment, "
+        "and Remediation. Use ## for sub-sections within each top-level section. "
+        "Use ### for sub-items, individual CVEs, or per-port detail."
+    )
     prompt += (
         "\nFORMAT: Your response MUST begin with this exact structured block before any analysis:\n"
         "RECONIQ_SUMMARY_START\n"
