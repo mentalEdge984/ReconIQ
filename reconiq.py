@@ -48,6 +48,36 @@ I_WARN = f"{C_YELLOW}⚠{C_END}"
 I_ERROR = f"{C_RED}✖{C_END}"
 I_ARROW = f"{C_DIM}➜{C_END}"
 
+def severity_color(cvss=None, epss_pct=None):
+    """Return (ansi_color_code, badge_string) based on CVSS or EPSS.
+    Takes the worst severity from whichever values are provided."""
+    levels = []
+    if cvss is not None:
+        if cvss >= 9.0:   levels.append('critical')
+        elif cvss >= 7.0: levels.append('high')
+        elif cvss >= 4.0: levels.append('medium')
+        else:             levels.append('low')
+    if epss_pct is not None:
+        if epss_pct >= 70:   levels.append('critical')
+        elif epss_pct >= 40: levels.append('high')
+        elif epss_pct >= 10: levels.append('medium')
+        else:                levels.append('low')
+    priority = ['critical', 'high', 'medium', 'low']
+    worst = next((l for l in priority if l in levels), 'low')
+    colors = {
+        'critical': '\033[1;91m',
+        'high':     '\033[1;33m',
+        'medium':   '\033[33m',
+        'low':      '\033[32m',
+    }
+    badges = {
+        'critical': f"\033[1;91m🔴 CRITICAL{C_END}",
+        'high':     f"\033[1;33m🟠 HIGH{C_END}",
+        'medium':   f"\033[33m🟡 MEDIUM{C_END}",
+        'low':      f"\033[32m🟢 LOW{C_END}",
+    }
+    return colors[worst], badges[worst]
+
 SCAN_MESSAGES = [
     'Sweeping network signatures...',
     'Probing the digital underbelly...',
@@ -236,6 +266,18 @@ def render_markdown_to_terminal(text):
     text = re.sub(r'^(#{1,3})\s+(.*)', f'\n  {C_CYAN}│{C_END} {C_BOLD}\\2{C_END}', text, flags=re.MULTILINE)
     text = re.sub(r'\*\*(.*?)\*\*', f'{C_BOLD}\\1{C_END}', text)
     text = re.sub(r'^(\s*)\*\s', f'\\1  {C_DIM}•{C_END} ', text, flags=re.MULTILINE)
+
+    def _cvss_badge(m):
+        _, badge = severity_color(cvss=float(m.group(1)))
+        return f"{badge} {m.group(0)}"
+
+    def _epss_badge(m):
+        _, badge = severity_color(epss_pct=float(m.group(1)))
+        return f"{badge} {m.group(0)}"
+
+    text = re.sub(r'CVSS[^:]*(?:Base\s+)?Score:\s*(\d+\.?\d*)', _cvss_badge, text)
+    text = re.sub(r'EPSS[^\d]*(\d+\.?\d*)%', _epss_badge, text)
+
     lines = text.split('\n')
     indented = "\n".join([f"    {line}" if not line.startswith("  │") else line for line in lines])
     return indented
