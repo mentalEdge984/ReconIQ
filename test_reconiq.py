@@ -203,3 +203,157 @@ def test_severity_no_inputs_returns_low():
     from reconiq import severity_color
     color, badge = severity_color()
     assert 'LOW' in badge
+
+
+# ─── _parse_summary() ────────────────────────────────────────────────────────
+
+_FAKE_REPORT = """\
+RECONIQ_SUMMARY_START
+overall_risk: CRITICAL
+services_found: 3
+critical_cves: 3
+highest_cvss: 10.0
+highest_epss: 94.41
+evidence_basis: Banner-identified
+headline: Three unpatched RCE vulnerabilities on a Windows host.
+action: Apply Windows security updates immediately.
+RECONIQ_SUMMARY_END
+Rest of report here."""
+
+def test_parse_summary_valid():
+    from reconiq import _parse_summary
+    summary, body = _parse_summary(_FAKE_REPORT)
+    assert summary is not None
+    assert summary['overall_risk'] == 'CRITICAL'
+    assert summary['highest_cvss'] == '10.0'
+    assert summary['evidence_basis'] == 'Banner-identified'
+    assert 'Rest of report here' in body
+
+def test_parse_summary_missing_block():
+    from reconiq import _parse_summary
+    text = "Just a normal report with no summary block."
+    summary, body = _parse_summary(text)
+    assert summary is None
+    assert body == text
+
+def test_parse_summary_strips_block_from_body():
+    from reconiq import _parse_summary
+    summary, body = _parse_summary(_FAKE_REPORT)
+    assert 'RECONIQ_SUMMARY_START' not in body
+    assert 'RECONIQ_SUMMARY_END' not in body
+    assert 'Rest of report here' in body
+
+def test_parse_summary_port_signature_only():
+    from reconiq import _parse_summary
+    text = ("RECONIQ_SUMMARY_START\n"
+            "overall_risk: HIGH\n"
+            "evidence_basis: Port-signature-only\n"
+            "RECONIQ_SUMMARY_END\nReport body.")
+    summary, _ = _parse_summary(text)
+    assert summary is not None
+    assert summary['evidence_basis'] == 'Port-signature-only'
+
+
+# ─── _render_summary() ───────────────────────────────────────────────────────
+
+_SUMMARY_DICT = {
+    'overall_risk': 'CRITICAL',
+    'services_found': '3',
+    'critical_cves': '3',
+    'highest_cvss': '10.0',
+    'highest_epss': '94.41',
+    'evidence_basis': 'Banner-identified',
+    'headline': 'Three unpatched RCE vulnerabilities.',
+    'action': 'Patch immediately.',
+}
+
+def test_render_summary_none_returns_empty():
+    from reconiq import _render_summary
+    assert _render_summary(None, '10.0.0.1') == ""
+
+def test_render_summary_contains_target_ip():
+    from reconiq import _render_summary
+    out = _render_summary(_SUMMARY_DICT, '10.0.0.1')
+    assert '10.0.0.1' in out
+
+def test_render_summary_critical_risk_badge():
+    from reconiq import _render_summary
+    out = _render_summary(_SUMMARY_DICT, '10.0.0.1')
+    assert 'CRITICAL' in out
+
+def test_render_summary_box_structure():
+    from reconiq import _render_summary
+    import re
+    out = _render_summary(_SUMMARY_DICT, '10.0.0.1')
+    plain = re.sub(r'\033\[[0-9;]*m', '', out)
+    assert plain.startswith('╔')
+    assert plain.rstrip().endswith('╝')
+
+def test_render_summary_port_signature_warning_shown():
+    from reconiq import _render_summary
+    d = dict(_SUMMARY_DICT, overall_risk='LOW', evidence_basis='Port-signature-only')
+    out = _render_summary(d, '10.0.0.1')
+    assert 'speculative' in out
+
+def test_render_summary_port_signature_warning_absent_for_banner():
+    from reconiq import _render_summary
+    out = _render_summary(_SUMMARY_DICT, '10.0.0.1')
+    assert 'speculative' not in out
+
+
+# ─── _render_cve_priority_list() ─────────────────────────────────────────────
+
+def test_cve_priority_empty_list_returns_empty():
+    from reconiq import _render_cve_priority_list
+    assert _render_cve_priority_list([], {}) == ""
+
+def test_cve_priority_shows_cve_id():
+    from reconiq import _render_cve_priority_list
+    out = _render_cve_priority_list(['CVE-2021-44228'], {'CVE-2021-44228': '94.41%'})
+    assert 'CVE-2021-44228' in out
+
+def test_cve_priority_sorted_by_epss():
+    from reconiq import _render_cve_priority_list
+    cves = ['CVE-2020-0001', 'CVE-2021-44228']
+    epss = {'CVE-2020-0001': '2.00%', 'CVE-2021-44228': '94.41%'}
+    out = _render_cve_priority_list(cves, epss)
+    assert out.index('CVE-2021-44228') < out.index('CVE-2020-0001')
+
+def test_cve_priority_no_epss_data():
+    from reconiq import _render_cve_priority_list
+    out = _render_cve_priority_list(['CVE-2021-44228'], {})
+    assert 'CVE-2021-44228' in out
+
+def test_cve_priority_box_structure():
+    from reconiq import _render_cve_priority_list
+    out = _render_cve_priority_list(['CVE-2021-44228'], {})
+    assert out.startswith('╭')
+    assert out.rstrip().endswith('╯')
+
+
+# ─── _render_confidence_warning() ────────────────────────────────────────────
+
+def test_confidence_warning_banner_identified_empty():
+    from reconiq import _render_confidence_warning
+    assert _render_confidence_warning('Banner-identified') == ""
+
+def test_confidence_warning_empty_string_empty():
+    from reconiq import _render_confidence_warning
+    assert _render_confidence_warning('') == ""
+
+def test_confidence_warning_port_signature_returns_block():
+    from reconiq import _render_confidence_warning
+    out = _render_confidence_warning('Port-signature-only')
+    assert out != ""
+    assert 'port signatures' in out
+
+def test_confidence_warning_mixed_returns_block():
+    from reconiq import _render_confidence_warning
+    out = _render_confidence_warning('Mixed')
+    assert out != ""
+    assert 'port signatures' in out
+
+def test_confidence_warning_contains_confidence_note():
+    from reconiq import _render_confidence_warning
+    out = _render_confidence_warning('Port-signature-only')
+    assert 'CONFIDENCE NOTE' in out
