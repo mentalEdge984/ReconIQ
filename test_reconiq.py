@@ -157,3 +157,49 @@ def test_probe_failed_contains_context():
     probe_failed = "Active — probe failed (connection dropped during HTTP HEAD)"
     assert "probe failed" in probe_failed
     assert "HTTP HEAD" in probe_failed
+
+
+# ─── H-6: recv loop ──────────────────────────────────────────────────────────
+
+def test_recv_until_exists():
+    """_recv_until should be importable from reconiq"""
+    from reconiq import _recv_until
+    assert callable(_recv_until)
+
+
+# ─── severity_color() ────────────────────────────────────────────────────────
+
+def test_severity_critical_cvss():
+    from reconiq import severity_color
+    color, badge = severity_color(cvss=9.8)
+    assert '🔴' in badge
+    assert 'CRITICAL' in badge
+
+def test_severity_high_cvss():
+    from reconiq import severity_color
+    color, badge = severity_color(cvss=7.5)
+    assert '🟠' in badge
+    assert 'HIGH' in badge
+
+def test_severity_medium_cvss():
+    from reconiq import severity_color
+    color, badge = severity_color(cvss=5.0)
+    assert '🟡' in badge
+    assert 'MEDIUM' in badge
+
+def test_severity_low_cvss():
+    from reconiq import severity_color
+    color, badge = severity_color(cvss=2.0)
+    assert '🟢' in badge
+    assert 'LOW' in badge
+
+def test_severity_epss_overrides_to_critical():
+    from reconiq import severity_color
+    # Low CVSS but high EPSS — worst case wins
+    color, badge = severity_color(cvss=3.0, epss_pct=85.0)
+    assert 'CRITICAL' in badge
+
+def test_severity_no_inputs_returns_low():
+    from reconiq import severity_color
+    color, badge = severity_color()
+    assert 'LOW' in badge
