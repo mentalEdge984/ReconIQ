@@ -478,6 +478,18 @@ if __name__ == "__main__":
 
     if all_results:
         full_file_output = ""
+        _FALLBACK_ORDER = [
+            ('anthropic', 'ANTHROPIC_API_KEY'),
+            ('openai',    'OPENAI_API_KEY'),
+            ('gemini',    'GOOGLE_API_KEY'),
+        ]
+        fallback_provider, fallback_key = None, None
+        for _fp, _fenv in _FALLBACK_ORDER:
+            if _fp != provider:
+                _fk = os.environ.get(_fenv)
+                if _fk:
+                    fallback_provider, fallback_key = _fp, _fk
+                    break
         for i, (ip, found_ports) in enumerate(all_results.items()):
             if i > 0 and args.api_delay > 0:
                 time.sleep(args.api_delay)
@@ -505,6 +517,19 @@ if __name__ == "__main__":
                 if not args.quiet: stop_spinner()
 
             synthesis_failed = _is_ai_error(raw_report)
+
+            if synthesis_failed and fallback_provider:
+                if not args.quiet:
+                    print(f"  {I_WARN} Primary provider ({provider.upper()}) failed — trying {fallback_provider.upper()}...")
+                    start_spinner(CVE_MESSAGES)
+                cve_list = get_cves_from_ai(found_ports, fallback_provider, fallback_key, timeout=max(15, args.ai_timeout / 4))
+                epss_data = fetch_epss_data(cve_list)
+                if not args.quiet:
+                    stop_spinner()
+                    start_spinner(SYNTHESIS_MESSAGES)
+                raw_report = analyze_with_ai(ip, found_ports, epss_data, fallback_provider, fallback_key, args.brief, timeout=args.ai_timeout)
+                if not args.quiet: stop_spinner()
+                synthesis_failed = _is_ai_error(raw_report)
 
             if not args.quiet:
                 if synthesis_failed:
