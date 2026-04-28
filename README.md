@@ -93,6 +93,13 @@ Run tests with: `pytest test_reconiq.py -v`
 
 **Why two AI calls?** The first call is a tightly-constrained extraction (CVE IDs only), which keeps the EPSS lookup clean. The second call synthesizes the full report with real exploit-probability data injected back in. This produces dramatically better-grounded analysis than a single pass.
 
+### Internal Utilities
+
+| Helper | Purpose |
+|--------|---------|
+| `_recv_until(sock, timeout, max_bytes=16384)` | Loops `recv()` until HTTP header terminator (`\r\n\r\n` or `\n\n`), timeout, or byte cap. Never raises — returns whatever arrived. Used by both banner-grab paths in `scan_and_grab()`. |
+| `severity_color(cvss=None, epss_pct=None)` | Returns `(ansi_color, badge_string)` for the worst severity derived from either or both inputs. Used by `render_markdown_to_terminal()` to prepend colored badges to CVSS and EPSS lines in AI reports. |
+
 ---
 
 ## Network Configuration
@@ -152,7 +159,8 @@ Unauthorized scanning is illegal in most jurisdictions (Computer Fraud and Abuse
 - **v2.6.2 ✓:** Banner truncation fix — increased recv buffer, capture first 6 header lines (H-3)
 - **v2.6.3 ✓:** Binary protocol detection — `_is_binary()` helper prevents false-positive CVEs on TLS/RDP/proprietary services (H-4)
 - **v2.6.4 ✓:** H-5 fix — sendall() OSError now returns an explicit probe-failed banner, distinguishing it from a genuine quiet service; pytest suite wired to CI
-- **v2.7:** SQLite scan history, diff mode, JSON output format
+- **v2.7.0 ✓:** H-6 recv loop fix (`_recv_until()`), exponential backoff on AI 429/503, provider fallback on sustained failure, colored CVSS/EPSS severity badges in terminal output (`severity_color()`)
+- **v2.8:** SQLite scan history, diff mode, JSON output format
 - **v3.0:** FastAPI + WebSocket dashboard for real-time scan visualization
 - **v4.0+:** Possible Go/Rust rewrite for performance
 

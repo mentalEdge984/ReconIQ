@@ -83,4 +83,4 @@ This document tracks known security and code-quality issues identified at v2.4. 
 
 ---
 
-**Last reviewed:** v2.6.4
+**Last reviewed:** v2.7.0
