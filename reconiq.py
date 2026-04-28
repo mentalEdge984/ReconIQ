@@ -474,6 +474,19 @@ def _render_cve_priority_list(cve_list, epss_data, report_body=""):
     out.append(bottom)
     return "\n".join(out)
 
+def _render_confidence_warning(evidence_basis):
+    """Render the yellow confidence note for speculative CVE associations.
+    Returns '' when evidence_basis is Banner-identified."""
+    if evidence_basis not in ('Port-signature-only', 'Mixed'):
+        return ""
+    return (
+        f"\n{C_YELLOW}  ⚠ CONFIDENCE NOTE{C_END}\n"
+        f"{C_YELLOW}  No software banner was identified on this host. CVE associations{C_END}\n"
+        f"{C_YELLOW}  are based on port signatures only and may not reflect the actual{C_END}\n"
+        f"{C_YELLOW}  software stack. Verify the software running on each port before{C_END}\n"
+        f"{C_YELLOW}  acting on these findings.{C_END}"
+    )
+
 # --- AI PIPELINE ---
 def _http_error(provider, status_code, resp_text):
     if status_code == 401:
@@ -590,6 +603,12 @@ def analyze_with_ai(target_ip, scan_data, epss_data, provider, api_key, brief, t
         "\n4. HEADINGS: Use # (single hash) for top-level sections such as Services, Risk Assessment, "
         "and Remediation. Use ## for sub-sections within each top-level section. "
         "Use ### for sub-items, individual CVEs, or per-port detail."
+    )
+    prompt += (
+        "\n5. EVIDENCE BASIS: When citing CVEs, explicitly state whether the association is based on "
+        "software versions identified in banners (e.g. 'Banner shows Apache 2.4.49 — CVE-2021-41773 confirmed') "
+        "or inferred from port numbers only (e.g. 'Port 445 typically runs SMB — CVE-2017-0144 may apply'). "
+        "Never assert a vulnerability is confirmed when the evidence is port-based only."
     )
     prompt += (
         "\nFORMAT: Your response MUST begin with this exact structured block before any analysis:\n"
@@ -804,6 +823,10 @@ if __name__ == "__main__":
                     cve_panel = _render_cve_priority_list(cve_list, epss_data, report_body)
                     if cve_panel:
                         print(cve_panel)
+                    evidence = (summary or {}).get('evidence_basis', '').strip()
+                    conf_warning = _render_confidence_warning(evidence)
+                    if conf_warning:
+                        print(conf_warning)
                     print(render_markdown_to_terminal(report_body))
                 if cve_list:
                     print(f"\n  {C_CYAN}│{C_END} {C_BOLD}EPSS Deep Dive Links{C_END}")
