@@ -11,7 +11,7 @@ ReconIQ is a Python-based network analysis tool that combines fast multi-threade
 ## Features
 
 - **Multi-Threaded Scanning:** Fast TCP banner grabbing across single hosts or full subnets (CIDR supported)
-- **AI CVE Extraction:** Uses OpenAI or Google Gemini to identify the most critical CVEs from scan output
+- **AI CVE Extraction:** Uses OpenAI, Google Gemini, or Anthropic Claude to identify the most critical CVEs from scan output — with automatic exponential backoff and provider fallback on sustained failure
 - **EPSS Risk Scoring:** Pulls real-time exploit probability scores from the [FIRST.org EPSS API](https://www.first.org/epss/) — predicts the chance of exploitation within the next 30 days
 - **Senior-Analyst-Style Reports:** AI synthesizes findings into structured reports with attack vectors, CVSS scores, and step-by-step remediation
 - **Premium Terminal UI:** Live spinner, Unicode box drawing, markdown-to-ANSI rendering — looks good in any modern terminal
@@ -87,6 +87,8 @@ reconiq -t 10.0.0.5 -q -o scan.txt
 
 Run tests with: `pytest test_reconiq.py -v`
 
+> **Free-tier API users:** If you hit rate limits, use `--api-delay 10` to add a 10-second pause between AI calls on multi-host scans.
+
 ---
 
 ## How It Works
@@ -99,6 +101,53 @@ Run tests with: `pytest test_reconiq.py -v`
 |--------|---------|
 | `_recv_until(sock, timeout, max_bytes=16384)` | Loops `recv()` until HTTP header terminator (`\r\n\r\n` or `\n\n`), timeout, or byte cap. Never raises — returns whatever arrived. Used by both banner-grab paths in `scan_and_grab()`. |
 | `severity_color(cvss=None, epss_pct=None)` | Returns `(ansi_color, badge_string)` for the worst severity derived from either or both inputs. Used by `render_markdown_to_terminal()` to prepend colored badges to CVSS and EPSS lines in AI reports. |
+| `_parse_summary(report_text)` | Extracts the `RECONIQ_SUMMARY_START/END` block from AI output. Returns `(dict, stripped_body)` or `(None, report_text)` if absent or malformed. |
+| `_render_summary(summary_dict, target_ip)` | Renders the 68-char executive summary box with risk badge, service counts, CVSS/EPSS highs, evidence basis, headline, and action item. Returns `""` when `summary_dict` is `None`. |
+| `_render_cve_priority_list(cve_list, epss_data, report_body)` | Renders a `╭─╮` CVE panel sorted by EPSS descending. Each row shows a severity badge, CVE ID, EPSS %, CVSS score, and inline description extracted from the report body. Returns `""` when `cve_list` is empty. |
+| `_render_confidence_warning(evidence_basis)` | Returns a yellow five-line warning block when `evidence_basis` is `Port-signature-only` or `Mixed`, flagging that CVE associations are speculative. |
+
+---
+
+## Sample Output
+
+Every scan produces a structured terminal report. The executive summary box appears first, followed by the CVE priority panel and the full AI analysis.
+
+```
+╔══════════════════════════════════════════════════════════════════╗
+║  RECONIQ // EXECUTIVE SUMMARY — 192.168.1.10                     ║
+╠══════════════════════════════════════════════════════════════════╣
+║  Overall Risk:      🔴 CRITICAL                                   ║
+║  Services Found:    4                                             ║
+║  Critical CVEs:     3                                             ║
+║  Highest CVSS:      10.0                                         ║
+║  Highest EPSS:      94.41% (30-day exploit probability)          ║
+║  Evidence Basis:    Banner-identified                             ║
+╠══════════════════════════════════════════════════════════════════╣
+║  Three unpatched RCE vulnerabilities on a Windows SMB host.      ║
+║                                                                   ║
+║  →  Apply MS17-010 patches and disable SMBv1 immediately.        ║
+╚══════════════════════════════════════════════════════════════════╝
+
+╭─ CVE PRIORITY LIST — sorted by exploit probability ────────────╮
+│                                                                  │
+│  🔴 CRITICAL    CVE-2017-0144  EPSS: 94.41%  CVSS: 10.0        │
+│             EternalBlue SMB remote code execution               │
+│                                                                  │
+│  🟠 HIGH        CVE-2020-0796  EPSS: 41.20%  CVSS: 10.0        │
+│             SMBGhost pre-auth RCE in SMBv3 compression          │
+│                                                                  │
+╰──────────────────────────────────────────────────────────────────╯
+```
+
+When no software banner is identified, a confidence note is printed before the full report:
+
+```
+  ⚠ CONFIDENCE NOTE
+  No software banner was identified on this host. CVE associations
+  are based on port signatures only and may not reflect the actual
+  software stack. Verify the software running on each port before
+  acting on these findings.
+```
 
 ---
 
@@ -159,7 +208,7 @@ Unauthorized scanning is illegal in most jurisdictions (Computer Fraud and Abuse
 - **v2.6.2 ✓:** Banner truncation fix — increased recv buffer, capture first 6 header lines (H-3)
 - **v2.6.3 ✓:** Binary protocol detection — `_is_binary()` helper prevents false-positive CVEs on TLS/RDP/proprietary services (H-4)
 - **v2.6.4 ✓:** H-5 fix — sendall() OSError now returns an explicit probe-failed banner, distinguishing it from a genuine quiet service; pytest suite wired to CI
-- **v2.7.0 ✓:** H-6 recv loop fix (`_recv_until()`), exponential backoff on AI 429/503, provider fallback on sustained failure, colored CVSS/EPSS severity badges in terminal output (`severity_color()`)
+- **v2.7.0 ✓:** H-6 recv loop fix (`_recv_until()`), exponential backoff on AI 429/503, provider fallback on sustained failure, colored CVSS/EPSS severity badges (`severity_color()`), executive summary box with risk metrics, CVE priority panel sorted by EPSS, confidence context warning for port-signature-only evidence, visual h1/h2/h3 header hierarchy in terminal reports
 - **v2.8:** SQLite scan history, diff mode, JSON output format
 - **v3.0:** FastAPI + WebSocket dashboard for real-time scan visualization
 - **v4.0+:** Possible Go/Rust rewrite for performance
