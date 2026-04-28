@@ -93,6 +93,7 @@ CVE_MESSAGES = [
     'Bribing the EPSS API for a discount...',
     'Asking the threat oracle politely...',
     'Reading the FIRST.org tea leaves...',
+    'The truth is out there, anyone got the URL?...',
 ]
 
 SYNTHESIS_MESSAGES = [
@@ -282,12 +283,92 @@ def render_markdown_to_terminal(text):
     indented = "\n".join([f"    {line}" if not line.startswith("  │") else line for line in lines])
     return indented
 
+# --- REPORT RENDERING UTILITIES ---
+def _visual_len(s):
+    """Visual display width, stripping ANSI codes and counting wide chars (> U+FFFF) as 2."""
+    clean = re.sub(r'\033\[[0-9;]*m', '', s)
+    return sum(2 if ord(c) > 0xFFFF else 1 for c in clean)
+
+def _parse_summary(report_text):
+    """Extract RECONIQ_SUMMARY block from AI report.
+    Returns (dict, stripped_body) or (None, report_text) if absent or malformed."""
+    match = re.search(
+        r'RECONIQ_SUMMARY_START\s*(.*?)\s*RECONIQ_SUMMARY_END',
+        report_text, re.DOTALL
+    )
+    if not match:
+        return None, report_text
+    block = match.group(1).strip()
+    summary = {}
+    for line in block.splitlines():
+        if ':' in line:
+            key, _, value = line.partition(':')
+            summary[key.strip()] = value.strip()
+    if not summary:
+        return None, report_text
+    body = (report_text[:match.start()] + report_text[match.end():]).strip()
+    return summary, body
+
+def _render_summary(summary_dict, target_ip):
+    """Render the executive summary box panel. Returns '' if summary_dict is None."""
+    if summary_dict is None:
+        return ""
+    BOX_W = 68
+    INNER = BOX_W - 2  # 66 chars between the two ║ borders
+
+    def _line(content=""):
+        pad = max(0, INNER - 2 - _visual_len(content))
+        return f"║  {content}{' ' * pad}║"
+
+    def _wrap(text, width=64):
+        words, lines, current = text.split(), [], ""
+        for w in words:
+            if current and len(current) + 1 + len(w) > width:
+                lines.append(current)
+                current = w
+            else:
+                current = (current + " " + w).strip()
+        if current:
+            lines.append(current)
+        return lines or [""]
+
+    top    = f"╔{'═' * INNER}╗"
+    div    = f"╠{'═' * INNER}╣"
+    bottom = f"╚{'═' * INNER}╝"
+
+    risk_val = summary_dict.get('overall_risk', 'LOW').strip().upper()
+    _risk_cvss = {'CRITICAL': 9.5, 'HIGH': 7.5, 'MEDIUM': 5.0, 'LOW': 2.0}
+    _, risk_badge = severity_color(cvss=_risk_cvss.get(risk_val, 2.0))
+
+    out = [
+        top,
+        _line(f"RECONIQ // EXECUTIVE SUMMARY — {target_ip}"),
+        div,
+        _line(f"Overall Risk:      {risk_badge}"),
+        _line(f"Services Found:    {summary_dict.get('services_found', '?')}"),
+        _line(f"Critical CVEs:     {summary_dict.get('critical_cves', '?')}"),
+        _line(f"Highest CVSS:      {summary_dict.get('highest_cvss', '?')}"),
+        _line(f"Highest EPSS:      {summary_dict.get('highest_epss', '?')}% (30-day exploit probability)"),
+        _line(f"Evidence Basis:    {summary_dict.get('evidence_basis', '?')}"),
+    ]
+    if summary_dict.get('evidence_basis', '').strip() == 'Port-signature-only':
+        out.append(_line(f"{C_YELLOW}⚠ CVEs are speculative — no software banner identified.{C_END}"))
+    out.append(div)
+    for hl in _wrap(summary_dict.get('headline', ''), 64):
+        out.append(_line(hl))
+    out.append(_line())
+    for i, al in enumerate(_wrap(summary_dict.get('action', ''), 61)):
+        prefix = f"{C_CYAN}→{C_END}  " if i == 0 else "   "
+        out.append(_line(f"{prefix}{al}"))
+    out.append(bottom)
+    return "\n".join(out)
+
 # --- AI PIPELINE ---
 def _http_error(provider, status_code, resp_text):
     if status_code == 401:
         return f"Auth failed (401). Check your API key for {provider}."
     if status_code == 429:
-        return f"Rate limited (429). Try --api-delay or wait a moment."
+        return f"Rate limited (429). Try --api-delay or wait a moment. If you're on a free tier try: ~~reconiq -t [target] --api-delay 10"
     if 500 <= status_code < 600:
         return f"{provider} returned {status_code}. Provider may be having issues."
     return f"{provider} returned {status_code}: {resp_text[:200]}"
@@ -302,7 +383,7 @@ def _ai_call_with_backoff(call_fn, max_retries=3):
     call_fn must return a requests.Response object.
     Returns the final response regardless of status after max_retries."""
     import time
-    delay = 2
+    delay = 3
     for attempt in range(max_retries):
         resp = call_fn()
         if resp.status_code not in (429, 503):
@@ -310,7 +391,7 @@ def _ai_call_with_backoff(call_fn, max_retries=3):
         if attempt < max_retries - 1:
             print(f"\n  {I_WARN} Provider rate limited — retrying in {delay}s...")
             time.sleep(delay)
-            delay *= 2
+            delay *= 3
     return resp
 
 def get_cves_from_ai(scan_data, provider, api_key, timeout=15):
@@ -394,7 +475,22 @@ def analyze_with_ai(target_ip, scan_data, epss_data, provider, api_key, brief, t
         prompt += "3. REMEDIATION: Provide step-by-step, click-by-click instructions on securing these ports. "
     else:
         prompt += "3. REMEDIATION: Provide a 1-2 sentence mitigation summary."
-    prompt += "\nCRITICAL: Do NOT say 'Hello' or use conversational filler. Start directly with headers."
+    prompt += (
+        "\nFORMAT: Your response MUST begin with this exact structured block before any analysis:\n"
+        "RECONIQ_SUMMARY_START\n"
+        "overall_risk: CRITICAL|HIGH|MEDIUM|LOW\n"
+        "services_found: <integer — count of active services in the scan data>\n"
+        "critical_cves: <integer — count of CVEs with CVSS >= 9.0>\n"
+        "highest_cvss: <float — highest CVSS Base Score identified, or 0.0 if none>\n"
+        "highest_epss: <float — highest EPSS percentage value, or 0.0 if none>\n"
+        "evidence_basis: Banner-identified if software names/versions visible in banners; "
+        "Port-signature-only if inferring from port numbers only; Mixed if partial\n"
+        "headline: <one sentence, plain English, non-technical, for a non-security audience>\n"
+        "action: <one sentence — the single most important next step>\n"
+        "RECONIQ_SUMMARY_END\n"
+        "CRITICAL: Do NOT say 'Hello' or use conversational filler. "
+        "Start with RECONIQ_SUMMARY_START immediately."
+    )
 
     try:
         if provider == "openai":
@@ -585,7 +681,11 @@ if __name__ == "__main__":
                             epss_str = epss_data.get(cve, "No EPSS data")
                             print(f"    {C_DIM}•{C_END} {C_BOLD}{cve}{C_END}  {C_DIM}{epss_str}{C_END}")
                 else:
-                    print(render_markdown_to_terminal(raw_report))
+                    summary, report_body = _parse_summary(raw_report)
+                    rendered_summary = _render_summary(summary, ip)
+                    if rendered_summary:
+                        print(rendered_summary)
+                    print(render_markdown_to_terminal(report_body))
                 if cve_list:
                     print(f"\n  {C_CYAN}│{C_END} {C_BOLD}EPSS Deep Dive Links{C_END}")
                     for cve in cve_list:
