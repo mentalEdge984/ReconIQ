@@ -380,6 +380,100 @@ def _render_summary(summary_dict, target_ip):
     out.append(bottom)
     return "\n".join(out)
 
+def _render_cve_priority_list(cve_list, epss_data, report_body=""):
+    """Render a prioritized CVE panel sorted by EPSS descending.
+    Returns '' when cve_list is empty."""
+    if not cve_list:
+        return ""
+
+    BOX_W = 68
+    INNER = BOX_W - 2  # 66
+
+    def _line(content=""):
+        pad = max(0, INNER - 2 - _visual_len(content))
+        return f"│  {content}{' ' * pad}│"
+
+    def _epss_pct(cve):
+        s = epss_data.get(cve, "")
+        m = re.search(r'(\d+\.?\d*)', s)
+        return float(m.group(1)) if m else 0.0
+
+    def _extract_desc(cve_id):
+        if not report_body:
+            return ""
+        rlines = report_body.split('\n')
+        for i, ln in enumerate(rlines):
+            if cve_id.upper() not in ln.upper():
+                continue
+            after = re.split(re.escape(cve_id), ln, flags=re.IGNORECASE, maxsplit=1)[-1]
+            inline = re.sub(r'^[\s\-—:()\[\]*#]+', '', after).strip()
+            if inline and len(inline) > 8:
+                return inline.split('.')[0].strip()[:64]
+            for nxt in rlines[i + 1:i + 4]:
+                c = re.sub(r'^[#*\s]+', '', nxt)
+                c = re.sub(r'\*\*|`', '', c).strip()
+                if c and 'CVE-' not in c and len(c) > 8:
+                    return c.split('.')[0].strip()[:64]
+            return ""
+        return ""
+
+    def _extract_cvss(cve_id):
+        if not report_body:
+            return None
+        lines = report_body.split('\n')
+        for i, ln in enumerate(lines):
+            if cve_id.upper() not in ln.upper():
+                continue
+            ctx = '\n'.join(lines[i:i + 6])
+            m = re.search(r'CVSS[^:]*(?:Base\s+)?Score:\s*(\d+\.?\d*)', ctx, re.IGNORECASE)
+            if not m:
+                m = re.search(r'CVSS\s*v?[\d.]*\s*:?\s*(\d+\.\d+)', ctx, re.IGNORECASE)
+            return m.group(1) if m else None
+        return None
+
+    def _pad_badge(badge):
+        return badge + ' ' * max(0, 11 - _visual_len(badge))
+
+    sorted_cves = sorted(cve_list, key=_epss_pct, reverse=True)
+
+    title = "CVE PRIORITY LIST — sorted by exploit probability"
+    fill  = max(2, 63 - len(title))
+    header = f"╭─ {title} {'─' * fill}╮"
+    empty  = f"│{' ' * INNER}│"
+    bottom = f"╰{'─' * INNER}╯"
+
+    out = [header]
+    for cve in sorted_cves:
+        pct = _epss_pct(cve)
+        if pct > 0:
+            _, badge = severity_color(epss_pct=pct)
+        else:
+            cvss_str = _extract_cvss(cve)
+            _, badge = severity_color(cvss=float(cvss_str)) if cvss_str else severity_color()
+
+        pb = _pad_badge(badge)
+
+        if epss_data:
+            parts = [cve]
+            if pct > 0:
+                parts.append(f"EPSS: {pct:.2f}%")
+            cvss_str = _extract_cvss(cve)
+            if cvss_str:
+                parts.append(f"CVSS: {cvss_str}")
+            cve_line = f"{pb}  {'  '.join(parts)}"
+        else:
+            cve_line = f"{pb}  {cve}"
+
+        out.append(empty)
+        out.append(_line(cve_line))
+        desc = _extract_desc(cve)
+        if desc:
+            out.append(_line(' ' * 13 + desc))
+
+    out.append(empty)
+    out.append(bottom)
+    return "\n".join(out)
+
 # --- AI PIPELINE ---
 def _http_error(provider, status_code, resp_text):
     if status_code == 401:
@@ -707,6 +801,9 @@ if __name__ == "__main__":
                     rendered_summary = _render_summary(summary, ip)
                     if rendered_summary:
                         print(rendered_summary)
+                    cve_panel = _render_cve_priority_list(cve_list, epss_data, report_body)
+                    if cve_panel:
+                        print(cve_panel)
                     print(render_markdown_to_terminal(report_body))
                 if cve_list:
                     print(f"\n  {C_CYAN}│{C_END} {C_BOLD}EPSS Deep Dive Links{C_END}")
